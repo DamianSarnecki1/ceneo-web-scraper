@@ -1,3 +1,12 @@
 h1{
     color: darkorange;
+    text-align: center;
+}
+body{
+    background-color: aliceblue;
+    font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    
+}
+footer{
+    text-align: center;
 }

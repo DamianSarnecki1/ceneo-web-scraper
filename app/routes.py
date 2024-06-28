@@ -1,7 +1,8 @@
 from app import app
-from flask import render_template,request,redirect,url_for
-import requests
-from bs4 import BeautifulSoup
+from flask import render_template, request, redirect, url_for, send_file
+import pandas as pd
+import io
+from app.model import Product
 
 @app.route('/')
 def index():
@@ -11,29 +12,24 @@ def index():
 def extract():
     if request.method=='POST':
         product_id=request.form.get('product_id')
-        url=f"https://www.ceneo.pl/{product_id}"
-        response=requests.get(url)
-        if response.status_code==requests.codes['ok']:
-            page_dom=BeautifulSoup(response.text)
-            try:
-                opinions_count=page_dom.select_one('a.product-review_link>span').text.strip()
-            except AttributeError:
-                opinions_count=0
-                if opinions_count:
-                    return render_template('extract.html',error='Product has no opinions')
+        product_id = request.form.get('product_id')
+        product = Product(product_id)
+        if product.extract_opinions():
+         return redirect(url_for('product', product_id=product_id))
+        return render_template("extract.html", error="Product has no opinions or does not exist")
+    return render_template("extract.html")
                    
 
                     
 
 
 
-        return redirect(url_for('product',product_id=product_id))
-
-    return render_template("extract.html")
-
+    
 @app.route('/products')
 def products():
-    return render_template("products.html")
+    products = Product.list_products()
+    return render_template("products.html", products=products)
+
 
 @app.route('/author')
 def author():
@@ -41,9 +37,33 @@ def author():
 
 @app.route('/product/<product_id>')
 def product(product_id):
-    return render_template("product.html")
+    opinions = Product.get_product_opinions(product_id)
+    if opinions is not None:
+        return render_template("product.html", product_id=product_id, opinions=opinions.to_html(classes="table table-warning table-striped"), table_id="opinions", index=False)
+    return redirect(url_for('extract'))
 
-@app.route('/hello')
-@app.route('/hello/<name>')
-def hello(name="Anonymous"):
-    return f"Hello, {name}!"    
+@app.route('/charts/<product_id>')
+def charts(product_id):
+    return render_template('charts.html', product_id=product_id)
+
+@app.route('/download_json/<product_id>')
+def download_json(product_id):
+    return send_file(f"./data/opinions/{product_id}.json", "text/json", as_attachment=True)
+
+@app.route('/download_csv/<product_id>')
+def download_csv(product_id):
+    opinions = Product.get_product_opinions(product_id)
+    buffer = io.BytesIO(opinions.to_csv(index=False).encode())
+    return send_file(buffer, "text/csv", as_attachment=True, download_name=f"{product_id}.csv")
+
+
+@app.route('/download_xlsx/<product_id>')
+def download_xlsx(product_id):
+    opinions = Product.get_product_opinions(product_id)
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer) as writer:
+        opinions.to_excel(writer, index=False)
+    buffer.seek(0)
+    return send_file(buffer, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, download_name=f"{product_id}.xlsx")
+
+    
